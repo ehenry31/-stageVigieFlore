@@ -31,7 +31,16 @@ sapply(polliservice,function(x) sum(is.na(x))) # 0
 
 traits570 <- read.delim("Traits570EspCommunes_Pollinisation.txt", header = TRUE, sep = "\t", dec = ".")
 sapply(traits570, function(x) length(unique(x)))
-sapply(traits570,function(x) sum(is.na(x))) #Nombreuses valeurs manquantes 
+sapply(traits570,function(x) sum(is.na(x)))
+# Il manque:
+# 34% des valeurs de début/fin de floraison CATMINAT
+# 16% couleur de fleur CATMINAT
+# 43% qté de nectar BIOLFLOR 
+# 2 type de fleur 
+# 26 % vecteur de poll LEDA
+# 19 % vecteur de poll BIOLFLOR 
+# 14 % vecteur de poll CATMINAT
+# 20 info entomogame
 
 ## VERIFICATION DES DONNÉES : si on a bien les mêmes espèces entre les 2 framadate
 
@@ -47,6 +56,41 @@ sapply(traits570,function(x) sum(is.na(x))) #Nombreuses valeurs manquantes
 # sum(is.na(tendtempo$verification_esp)) # = 0, on retrouve bien les mêmes espèces 
 # tendtempo$verification_esp <- NULL
 
+# ENLEVER LES OUTLIERS
+
+# outlierKD <- function(dt, var) {
+#   var_name <- eval(substitute(var),eval(dt))
+#   na1 <- sum(is.na(var_name))
+#   m1 <- mean(var_name, na.rm = T)
+#   par(mfrow=c(2, 2), oma=c(0,0,3,0))
+#   boxplot(var_name, main="With outliers")
+#   hist(var_name, main="With outliers", xlab=NA, ylab=NA)
+#   outlier <- boxplot.stats(var_name)$out
+#   mo <- mean(outlier)
+#   var_name <- ifelse(var_name %in% outlier, NA, var_name)
+#   boxplot(var_name, main="Without outliers")
+#   hist(var_name, main="Without outliers", xlab=NA, ylab=NA)
+#   title("Outlier Check", outer=TRUE)
+#   na2 <- sum(is.na(var_name))
+#   cat("Outliers identified:", na2 - na1, "n")
+#   cat("Propotion (%) of outliers:", round((na2 - na1) / sum(!is.na(var_name))*100, 1), "n")
+#   cat("Mean of the outliers:", round(mo, 2), "n")
+#   m2 <- mean(var_name, na.rm = T)
+#   cat("Mean without removing outliers:", round(m1, 2), "n")
+#   cat("Mean if we remove outliers:", round(m2, 2), "n")
+#   response <- readline(prompt="Do you want to remove outliers and to replace with NA? [yes/no]: ")
+#   if(response == "y" | response == "yes"){
+#     dt[as.character(substitute(var))] <- invisible(var_name)
+#     assign(as.character(as.list(match.call())$dt), dt, envir = .GlobalEnv)
+#     cat("Outliers successfully removed", "n")
+#     return(invisible(dt))
+#   } else{
+#     cat("Nothing changed", "n")
+#     return(invisible(var_name))
+#   }
+# }
+# 
+# outlierKD(tendtempo, mean)
 
 ### Compléter les valeurs manquantes des traits
 
@@ -125,13 +169,14 @@ test_flow %>% ggplot()+
 
 
 test_tend_poll <- tendtempo
-test_tend_poll <- data.frame(test_tend_poll,info_entomogame=NA)
+test_tend_poll <- data.frame(test_tend_poll,info_entomogame=NA,Fam=NA)
 
-colnames(test_tend_poll) <- c("Esp","nbReleves","mean","sd","X2.5.","X97.5.","info_entomogame")
+colnames(test_tend_poll) <- c("Esp","nbReleves","mean","sd","X2.5.","X97.5.","info_entomogame","Fam")
 for (i in 1:nrow(test_tend_poll)){
   for (j in 1:nrow(traits570)){
     if (test_tend_poll$Esp[i]==traits570$Esp[j]){
       test_tend_poll$info_entomogame[i] <- traits570$DepPoll_.InfoEntomogame[j]
+      test_tend_poll$Fam[i] <- as.character(traits570$Fam[j])
     }
   }
 }
@@ -139,11 +184,20 @@ for (i in 1:nrow(test_tend_poll)){
 sapply(test_tend_poll,function(x) sum(is.na(x))) #20 NA 
 test_tend_poll <- test_tend_poll %>% filter(!is.na(info_entomogame)) #On filtre
 
-# Convertir la colonne info_entomogame en facteur 
-
-ggplot(test_tend_poll,aes(x=as.factor(info_entomogame), y=mean)) + 
+ggplot(test_tend_poll,aes(x=as.factor(info_entomogame), y=mean)) +  # Convertir la colonne info_entomogame en facteur 
   geom_boxplot()
-#on observe pas de tendance particulière
-summary(lm(info_entomogame~mean,data=test_tend_poll))
+#on n'observe pas de tendance particulière
+model <- lm(info_entomogame~mean,data=test_tend_poll)
+plot(model)
+hist(resid(model))
+shapiro.test(resid(model)) #Hypothèse non validée
+summary(model) 
 # p-value: 0.05965, effet non significatif du % d'info entomogame sur la tendance
-AIC(lm(info_entomogame~mean,data=test_tend_poll)) #AIC= 5544
+AIC(model) #AIC= 5544
+
+#En fonction de la famille
+ggplot(test_tend_poll,aes(x=mean,fill=Fam))+
+  geom_histogram()+
+  labs(x="Tendency",y="Count")+
+  ggtitle(" Count of species tendency ")
+
