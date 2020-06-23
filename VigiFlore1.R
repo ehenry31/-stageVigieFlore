@@ -13,6 +13,7 @@ library(TR8)
 library("writexl")
 
 
+library(xlsx)
 ############## MISE EN FORME DES DONNEES ###############
 
 # EXTRACTION DES DONNEES
@@ -32,6 +33,9 @@ sapply(polliservice,function(x) sum(is.na(x))) # 0
 traits570 <- read.delim("Traits570EspCommunes_Pollinisation.txt", header = TRUE, sep = "\t", dec = ".")
 sapply(traits570, function(x) length(unique(x)))
 sapply(traits570,function(x) sum(is.na(x)))
+
+
+
 # Il manque:
 # 34% des valeurs de début/fin de floraison CATMINAT
 # 16% couleur de fleur CATMINAT
@@ -41,6 +45,37 @@ sapply(traits570,function(x) sum(is.na(x)))
 # 19 % vecteur de poll BIOLFLOR 
 # 14 % vecteur de poll CATMINAT
 # 20 info entomogame
+
+# On complète les données 
+
+library(readxl)
+monDataset <- read_excel("multi_traits.xlsx")
+
+# On rejoute le trait:  type de fleur MUELLER
+
+my_species <-monDataset$Esp
+my_traits <- c("flw_muell") # Brot
+my_Data <- tr8(species_list=my_species, download_list=my_traits)
+# ajouter synonyms=TRUE pour interroger la synonymie, attention pour certaines sp ca fait beuguer la fonction
+traits_dataframe <- extract_traits(my_Data) # pour conversion en dataframe
+
+monDataset <- data.frame(monDataset, traits_dataframe$flw_muell)
+names(monDataset)[names(monDataset) == 'traits_dataframe.flw_muell'] <- 'flw_muell_BIOLFLORE'
+
+sapply(monDataset, function(x) length(unique(x)))
+sapply(monDataset,function(x) sum(is.na(x)))
+
+# Il manque:
+# 2% des valeurs de début/fin de floraison CATMINAT
+# 2% couleur de fleur CATMINAT
+# 2 type de fleur 
+# 26 % vecteur de poll LEDA
+# 19 % vecteur de poll BIOLFLOR 
+# 2 % vecteur de poll CATMINAT
+# 4 info entomogame
+#50 UV reflexion pattern
+# 16% type de fleur MUELLER
+
 
 ## VERIFICATION DES DONNÉES : si on a bien les mêmes espèces entre les 2 framadate
 
@@ -67,7 +102,10 @@ my_Data<-tr8(species_list = my_species, download_list = my_traits)
 print(my_Data)
 Flower_Color_Plants <-as.data.frame.table(extract_traits(my_Data))
 
-### ENREGISTRER FICHIER EXCEL
+### ENREGISTRER FICHIER EXCEL et liste espèces
+
+list_esp<- data.frame(traits570$Esp)
+write.table(list_esp,  "list_esp.txt",quote=F, sep = "\t",row.names=F, col.names=F)
 
 write_xlsx(traits570,"~/Desktop/DataStageEtienne/traits570.xlsx")
 
@@ -164,4 +202,28 @@ ggplot(test_tend_poll,aes(x=mean,fill=Fam))+
   geom_histogram()+
   labs(x="Tendency",y="Count")+
   ggtitle(" Count of species tendency ")
+       
+# Reflection au UV
 
+test_UVreflection <- data.frame(tendtempo$Esp,tendtempo$mean)
+test_UVreflection <- data.frame(test_UVreflection,UV_reflection_pattern=NA)
+
+colnames(test_UVreflection) <- c("Esp","mean_tend","UV_reflection_pattern")
+
+for (i in 1:nrow(tendtempo)){
+  for (j in 1:nrow(monDataset)){
+    if (tendtempo$Esp[i]==monDataset$Esp[j]){
+      test_UVreflection$UV_reflection_pattern[i] <- as.character(monDataset$UV_reflexion_pattern_BIOLFLORE[j])
+    }
+  }
+}
+
+sapply(test_UVreflection,function(x) sum(is.na(x))) #271 NA, c'est beaucoup...
+
+test_UVreflection <- test_UVreflection %>% filter(!is.na(UV_reflection_pattern))
+
+test_UVreflection %>% ggplot(aes(x=UV_reflection_pattern,y=mean_tend))+
+  geom_boxplot()+
+  labs(x="UV reflection pattern",y="Mean tendency")
+
+ # pas de tendance observable de manière qualitative, à compléter avec test stat
